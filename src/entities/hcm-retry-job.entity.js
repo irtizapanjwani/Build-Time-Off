@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { RetryStatus } from '../common/enums/retry-status.enum';
 
 /**
  * @typedef {import('../common/enums/retry-status.enum').RetryStatus} RetryStatus
@@ -27,7 +28,7 @@ export class HcmRetryJob {
   /**
    * @type {RetryStatus}
    */
-  @Column({ type: 'varchar' })
+  @Column({ type: 'simple-enum', enum: RetryStatus })
   status;
 
   /**

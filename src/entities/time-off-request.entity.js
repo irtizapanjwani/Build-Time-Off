@@ -1,4 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, VersionColumn, CreateDateColumn } from 'typeorm';
+import { LeaveType } from '../common/enums/leave-type.enum';
+import { RequestStatus } from '../common/enums/request-status.enum';
 
 /**
  * @typedef {import('../common/enums/leave-type.enum').LeaveType} LeaveType
@@ -28,7 +30,7 @@ export class TimeOffRequest {
   /**
    * @type {LeaveType}
    */
-  @Column({ type: 'varchar' })
+  @Column({ type: 'simple-enum', enum: LeaveType })
   leaveType;
 
   /**
@@ -52,7 +54,7 @@ export class TimeOffRequest {
   /**
    * @type {RequestStatus}
    */
-  @Column({ type: 'varchar' })
+  @Column({ type: 'simple-enum', enum: RequestStatus })
   status;
 
   /**
