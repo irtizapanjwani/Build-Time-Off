@@ -3,14 +3,18 @@ import crypto from 'crypto';
 import { DataSource } from 'typeorm';
 import { IdempotencyRecord } from '../entities/idempotency-record.entity.js';
 
+import { ConfigService } from '@nestjs/config';
+
 @Injectable()
-@Dependencies(DataSource)
+@Dependencies(DataSource, ConfigService)
 export class IdempotencyService {
   /**
    * @param {DataSource} dataSource 
+   * @param {ConfigService} configService
    */
-  constructor(dataSource) {
+  constructor(dataSource, configService) {
     this.dataSource = dataSource;
+    this.configService = configService;
     this.logger = new Logger(IdempotencyService.name);
   }
 
@@ -25,9 +29,10 @@ export class IdempotencyService {
 
     if (!record) return null;
 
-    // Check TTL (24 hours)
-    const twentyFourHoursMs = 24 * 60 * 60 * 1000;
-    const isExpired = Date.now() - new Date(record.createdAt).getTime() > twentyFourHoursMs;
+    // Check TTL from config (fallback to 24 hours)
+    const ttlSeconds = this.configService.get('idempotency.ttlSeconds') || 86400;
+    const ttlMs = ttlSeconds * 1000;
+    const isExpired = Date.now() - new Date(record.createdAt).getTime() > ttlMs;
 
     if (isExpired) {
       // Clean up expired record lazily (optional)
@@ -49,12 +54,17 @@ export class IdempotencyService {
     const repo = this.dataSource.getRepository(IdempotencyRecord);
     
     try {
-      await repo.save({
-        key,
-        employeeId: employeeId || 'unknown',
-        statusCode,
-        responseBody: JSON.stringify(responseBody),
-      });
+      await repo.createQueryBuilder()
+        .insert()
+        .into(IdempotencyRecord)
+        .values({
+          key,
+          employeeId: employeeId || 'unknown',
+          statusCode,
+          responseBody: JSON.stringify(responseBody),
+        })
+        .orIgnore()
+        .execute();
     } catch (error) {
       // Log silently so we don't break main flow on idempotency failure
       const safeKey = crypto.createHash('sha256').update(key).digest('hex').substring(0, 8) + '...';

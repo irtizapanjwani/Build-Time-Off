@@ -30,9 +30,9 @@ export class HcmClientService {
     this.failureCount = 0;
     this.nextAttemptMs = null;
     
-    // TRD thresholds: 5 fails = 60s OPEN state
-    this.failureThreshold = 5;
-    this.resetTimeoutMs = 60000;
+    // TRD thresholds: configurable thresholds
+    this.failureThreshold = this.configService.get('hcm.circuitThreshold') || 5;
+    this.resetTimeoutMs = this.configService.get('hcm.circuitResetMs') || 60000;
   }
 
   _checkCircuitBreaker() {

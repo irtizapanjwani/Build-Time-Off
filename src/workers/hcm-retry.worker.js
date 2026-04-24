@@ -29,13 +29,21 @@ export class HcmRetryWorker {
     const retryJobRepo = this.dataSource.getRepository(HcmRetryJob);
     const requestRepo = this.dataSource.getRepository(TimeOffRequest);
 
-    // Fetch up to 10 queued jobs (removed pessimistic lock for SQLite compatibility)
-    const jobs = await retryJobRepo
-      .createQueryBuilder('job')
-      .where('job.status = :status', { status: RetryStatus.QUEUED })
-      .orderBy('job.lastAttemptAt', 'ASC', 'NULLS FIRST')
-      .take(10)
-      .getMany();
+    // Fetch up to 10 queued jobs atomically to prevent concurrent processing
+    const rawJobs = await retryJobRepo.query(`
+      UPDATE hcm_retry_job
+      SET status = '${RetryStatus.PROCESSING}'
+      WHERE id IN (
+        SELECT id FROM hcm_retry_job
+        WHERE status = '${RetryStatus.QUEUED}'
+        ORDER BY lastAttemptAt ASC NULLS FIRST
+        LIMIT 10
+      )
+      RETURNING *
+    `);
+    
+    // Fallback to empty array if no jobs returned
+    const jobs = Array.isArray(rawJobs) ? rawJobs : [];
 
     if (jobs.length === 0) return;
 
@@ -50,7 +58,7 @@ export class HcmRetryWorker {
         const hcmDeductResponse = await this.hcmClientService.deductBalance(payload);
         
         // 2. Fetch related request
-        const request = await requestRepo.findOne({ where: { id: job.requestId } });
+        let request = await requestRepo.findOne({ where: { id: job.requestId } });
         if (!request) {
           this.logger.error(`Request ${job.requestId} not found for retry job ${job.id}`);
           job.status = RetryStatus.FAILED;
@@ -71,12 +79,22 @@ export class HcmRetryWorker {
           } else {
             request.status = RequestStatus.HCM_ERROR;
             request.notes = 'Defensive GET-after-POST verification failed during retry.';
-            await this.balanceService.rollbackReservation(request.employeeId, request.locationId, request.leaveType, request.daysRequested);
+            try {
+              await this.balanceService.rollbackReservation(request.employeeId, request.locationId, request.leaveType, request.daysRequested);
+            } catch (rollbackError) {
+              this.logger.error(`Rollback failed for request ${request.id}`, rollbackError.stack);
+              request.notes += ` | Rollback failed: ${rollbackError.message}`;
+            }
           }
         } catch (error) {
           request.status = RequestStatus.HCM_ERROR;
           request.notes = 'Failed to verify HCM balance during retry.';
-          await this.balanceService.rollbackReservation(request.employeeId, request.locationId, request.leaveType, request.daysRequested);
+          try {
+            await this.balanceService.rollbackReservation(request.employeeId, request.locationId, request.leaveType, request.daysRequested);
+          } catch (rollbackError) {
+            this.logger.error(`Rollback failed for request ${request.id}`, rollbackError.stack);
+            request.notes += ` | Rollback failed: ${rollbackError.message}`;
+          }
         }
         
         let saveAttempt = 0;
@@ -94,7 +112,7 @@ export class HcmRetryWorker {
                 freshRequest.status = request.status;
                 freshRequest.notes = request.notes;
                 freshRequest.hcmTransactionId = request.hcmTransactionId;
-                Object.assign(request, freshRequest);
+                request = freshRequest;
               }
               continue;
             }
@@ -116,12 +134,17 @@ export class HcmRetryWorker {
             request.status = RequestStatus.HCM_ERROR;
             request.notes = 'Failed to sync with HCM after maximum retries.';
             // Release the reserved balance
-            await this.balanceService.rollbackReservation(
-              request.employeeId, 
-              request.locationId, 
-              request.leaveType, 
-              request.daysRequested
-            );
+            try {
+              await this.balanceService.rollbackReservation(
+                request.employeeId, 
+                request.locationId, 
+                request.leaveType, 
+                request.daysRequested
+              );
+            } catch (rollbackError) {
+              this.logger.error(`Rollback failed for request ${request.id}`, rollbackError.stack);
+              request.notes += ` | Rollback failed: ${rollbackError.message}`;
+            }
             
             let saveAttempt = 0;
             let saved = false;
@@ -137,7 +160,7 @@ export class HcmRetryWorker {
                   if (freshRequest) {
                     freshRequest.status = request.status;
                     freshRequest.notes = request.notes;
-                    Object.assign(request, freshRequest);
+                    request = freshRequest;
                   }
                   continue;
                 }

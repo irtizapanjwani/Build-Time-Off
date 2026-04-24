@@ -44,7 +44,7 @@ export class RequestService {
       request.status = RequestStatus.REJECTED;
       request.notes = 'Failed to reserve balance: ' + error.message;
       await requestRepo.save(request);
-      throw error;
+      return request;
     }
 
     // 3. Sync to HCM
@@ -82,9 +82,11 @@ export class RequestService {
       const hcmBalanceResponse = await this.hcmClientService.getBalance(request.employeeId, request.locationId, request.leaveType);
 
       // Determine if we should approve or flag
-      // Normally we'd do strict arithmetic checking here (e.g., local balance == remote balance).
-      // If verification fails, flag for manual intervention.
-      const verificationSucceeded = hcmBalanceResponse && typeof hcmBalanceResponse.balance === 'number';
+      // TODO: Implement strict arithmetic reconciliation.
+      // We need the pre-deduction balance available in this context to strictly check:
+      // (preDeductionBalance - request.daysRequested === hcmBalanceResponse.balance).
+      // For now, at minimum enforce that hcmBalanceResponse.balance is non-negative.
+      const verificationSucceeded = hcmBalanceResponse && typeof hcmBalanceResponse.balance === 'number' && hcmBalanceResponse.balance >= 0;
 
       if (verificationSucceeded) {
         await this.balanceService.commitReservation(request.employeeId, request.locationId, request.leaveType, request.daysRequested);
