@@ -12,6 +12,7 @@
 import { Module, Logger, Dependencies } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { HttpModule } from '@nestjs/axios';
 import { DataSource } from 'typeorm';
 
 import { DatabaseModule } from './database/database.module';
@@ -21,7 +22,15 @@ import {
   jobsConfig,
   idempotencyConfig,
   authConfig,
-} from './config/app.config';
+} from './config/app.config.js';
+
+import { BalanceService } from './services/balance.service.js';
+import { HcmClientService } from './services/hcm-client.service.js';
+import { RequestService } from './services/request.service.js';
+import { HcmRetryWorker } from './workers/hcm-retry.worker.js';
+import { IdempotencyService } from './services/idempotency.service.js';
+import { TimeOffController } from './controllers/time-off.controller.js';
+import { BalanceController } from './controllers/balance.controller.js';
 
 @Module({
   imports: [
@@ -39,9 +48,19 @@ import {
     // --- Scheduling ---
     // Required for reconciliation worker, retry worker, idempotency cleanup
     ScheduleModule.forRoot(),
+    HttpModule,
   ],
-  controllers: [],
-  providers: [],
+  controllers: [
+    TimeOffController,
+    BalanceController,
+  ],
+  providers: [
+    BalanceService,
+    HcmClientService,
+    RequestService,
+    HcmRetryWorker,
+    IdempotencyService,
+  ],
 })
 @Dependencies(DataSource)
 export class AppModule {

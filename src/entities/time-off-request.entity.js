@@ -62,7 +62,7 @@ export class TimeOffRequest {
   /**
    * @type {string|null}
    */
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   hcmTransactionId;
 
   /**
@@ -80,7 +80,7 @@ export class TimeOffRequest {
   /**
    * @type {string|null}
    */
-  @Column({ type: 'varchar', nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true })
   resolvedBy;
 
   /**

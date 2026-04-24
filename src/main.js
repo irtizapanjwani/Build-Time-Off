@@ -17,7 +17,7 @@ async function bootstrap() {
   });
 
   // Global prefix: all endpoints under /api/v1 (TRD Section 5.1)
-  app.setGlobalPrefix('api/v1/time-off');
+  app.setGlobalPrefix('api/v1');
 
   // Global validation pipe for DTO validation (TRD Section 5.3)
   // whitelist: strips unknown properties (defense against injection)
