@@ -1,4 +1,5 @@
-import { Injectable, Dependencies } from '@nestjs/common';
+import { Injectable, Dependencies, Logger } from '@nestjs/common';
+import crypto from 'crypto';
 import { DataSource } from 'typeorm';
 import { IdempotencyRecord } from '../entities/idempotency-record.entity.js';
 
@@ -10,6 +11,7 @@ export class IdempotencyService {
    */
   constructor(dataSource) {
     this.dataSource = dataSource;
+    this.logger = new Logger(IdempotencyService.name);
   }
 
   /**
@@ -55,7 +57,8 @@ export class IdempotencyService {
       });
     } catch (error) {
       // Log silently so we don't break main flow on idempotency failure
-      console.error(`Failed to save idempotency record for key ${key}`, error);
+      const safeKey = crypto.createHash('sha256').update(key).digest('hex').substring(0, 8) + '...';
+      this.logger.error(`Failed to save idempotency record for key=<${safeKey}>`, error.stack);
     }
   }
 }

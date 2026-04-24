@@ -17,7 +17,8 @@ async function bootstrap() {
   });
 
   // Global prefix: all endpoints under /api/v1 (TRD Section 5.1)
-  app.setGlobalPrefix('api/v1');
+  const globalPrefix = 'api/v1';
+  app.setGlobalPrefix(globalPrefix);
 
   // Global validation pipe for DTO validation (TRD Section 5.3)
   // whitelist: strips unknown properties (defense against injection)
@@ -39,7 +40,7 @@ async function bootstrap() {
 
   const logger = new Logger('Bootstrap');
   logger.log(`Time-Off Microservice running on port ${port}`);
-  logger.log(`API base: http://localhost:${port}/api/v1/time-off`);
+  logger.log(`API base: http://localhost:${port}/${globalPrefix}`);
 }
 
 bootstrap();

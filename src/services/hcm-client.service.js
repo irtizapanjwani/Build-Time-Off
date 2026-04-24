@@ -58,6 +58,10 @@ export class HcmClientService {
   }
 
   _handleFailure(error) {
+    // Ignore client/business errors (4xx)
+    if (error.response && error.response.status >= 400 && error.response.status < 500) {
+      throw error;
+    }
     this.failureCount++;
     this.logger.warn(`HCM request failed. Failure count: ${this.failureCount}/${this.failureThreshold}`);
 
@@ -84,12 +88,13 @@ export class HcmClientService {
    */
   async deductBalance(payload) {
     this._checkCircuitBreaker();
-    const baseUrl = this.configService.get('hcm.url');
+    const baseUrl = this.configService.get('hcm.baseUrl');
+    const timeoutMs = this.configService.get('hcm.timeoutMs');
 
     try {
       // Note: Using a mock endpoint for local development testing
       const response = await firstValueFrom(
-        this.httpService.post(`${baseUrl}/time-off/deduct`, payload)
+        this.httpService.post(`${baseUrl}/time-off/deduct`, payload, { timeout: timeoutMs })
       );
       this._handleSuccess();
       return response.data;
@@ -107,12 +112,14 @@ export class HcmClientService {
    */
   async getBalance(employeeId, locationId, leaveType) {
     this._checkCircuitBreaker();
-    const baseUrl = this.configService.get('hcm.url');
+    const baseUrl = this.configService.get('hcm.baseUrl');
+    const timeoutMs = this.configService.get('hcm.timeoutMs');
 
     try {
       const response = await firstValueFrom(
         this.httpService.get(`${baseUrl}/time-off/balance`, {
-          params: { employeeId, locationId, leaveType }
+          params: { employeeId, locationId, leaveType },
+          timeout: timeoutMs
         })
       );
       this._handleSuccess();

@@ -154,17 +154,49 @@ export class BalanceService {
    * @returns {Promise<LeaveBalance>}
    */
   async rollbackReservation(employeeId, locationId, leaveType, daysRequested) {
-    const balanceRepo = this.dataSource.getRepository(LeaveBalance);
-    const leaveBalance = await balanceRepo.findOne({
-      where: { employeeId, locationId, leaveType }
-    });
+    const maxRetries = 3;
+    let attempt = 0;
 
-    if (!leaveBalance) {
-      throw new Error('Leave balance not found during rollback');
+    while (attempt < maxRetries) {
+      attempt++;
+      const queryRunner = this.dataSource.createQueryRunner();
+      await queryRunner.connect();
+      await queryRunner.startTransaction();
+
+      try {
+        const balanceRepo = queryRunner.manager.getRepository(LeaveBalance);
+        const leaveBalance = await balanceRepo.findOne({
+          where: { employeeId, locationId, leaveType }
+        });
+
+        if (!leaveBalance) {
+          throw new Error('Leave balance not found during rollback');
+        }
+
+        if (Number(leaveBalance.pendingDeductions) < daysRequested) {
+          throw new Error('Invalid state: pendingDeductions less than daysRequested during rollback');
+        }
+
+        leaveBalance.pendingDeductions = Number(leaveBalance.pendingDeductions) - daysRequested;
+
+        const savedBalance = await balanceRepo.save(leaveBalance);
+        await queryRunner.commitTransaction();
+        return savedBalance;
+
+      } catch (error) {
+        await queryRunner.rollbackTransaction();
+
+        if (error instanceof OptimisticLockVersionMismatchError) {
+          this.logger.warn(`Version mismatch rolling back reservation for ${employeeId} (Attempt ${attempt}/${maxRetries})`);
+          if (attempt >= maxRetries) {
+            throw new Error('Concurrent modification error during rollback. Please try again later.');
+          }
+          continue;
+        }
+        throw error;
+      } finally {
+        await queryRunner.release();
+      }
     }
-
-    leaveBalance.pendingDeductions = Number(leaveBalance.pendingDeductions) - daysRequested;
-
-    return await balanceRepo.save(leaveBalance);
   }
 }

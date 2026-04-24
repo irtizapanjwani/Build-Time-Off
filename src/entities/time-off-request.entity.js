@@ -1,6 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, VersionColumn, CreateDateColumn, Check } from 'typeorm';
-import { LeaveType } from '../common/enums/leave-type.enum';
-import { RequestStatus } from '../common/enums/request-status.enum';
+import { LeaveType } from '../common/enums/leave-type.enum.js';
+import { RequestStatus } from '../common/enums/request-status.enum.js';
 
 /**
  * @typedef {import('../common/enums/leave-type.enum').LeaveType} LeaveType

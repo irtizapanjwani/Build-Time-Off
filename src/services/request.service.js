@@ -59,8 +59,8 @@ export class RequestService {
       request.hcmTransactionId = hcmDeductResponse.transactionId;
       await requestRepo.save(request);
     } catch (error) {
-      this.logger.warn(`HCM Sync failed for request ${request.id}. Moving to PENDING_HCM_SYNC.`);
-      request.status = RequestStatus.PENDING_HCM_SYNC;
+      this.logger.warn(`HCM Sync failed for request ${request.id}. Moving to HCM_ERROR.`);
+      request.status = RequestStatus.HCM_ERROR;
       await requestRepo.save(request);
 
       // Enqueue Retry Job
@@ -72,7 +72,7 @@ export class RequestService {
           leaveType: request.leaveType,
           days: request.daysRequested
         }),
-        status: RetryStatus.PENDING
+        status: RetryStatus.QUEUED
       });
       return request;
     }
@@ -90,16 +90,26 @@ export class RequestService {
         await this.balanceService.commitReservation(request.employeeId, request.locationId, request.leaveType, request.daysRequested);
         request.status = RequestStatus.APPROVED;
       } else {
-        request.status = RequestStatus.MANUAL_INTERVENTION_REQUIRED;
+        request.status = RequestStatus.HCM_ERROR;
         request.notes = 'Defensive GET-after-POST verification failed. Balances may be out of sync.';
-        await this.balanceService.rollbackReservation(request.employeeId, request.locationId, request.leaveType, request.daysRequested);
+        try {
+          await this.balanceService.rollbackReservation(request.employeeId, request.locationId, request.leaveType, request.daysRequested);
+        } catch (rollbackError) {
+          this.logger.error(`Rollback failed for request ${request.id}`, rollbackError.stack);
+          request.notes += ` | Rollback failed: ${rollbackError.message}`;
+        }
       }
     } catch (error) {
       // GET failed after successful POST
-      request.status = RequestStatus.MANUAL_INTERVENTION_REQUIRED;
+      request.status = RequestStatus.HCM_ERROR;
       request.notes = 'Failed to verify HCM balance after successful POST.';
       this.logger.error(`Failed to verify HCM balance for request ${request.id}`, error.stack);
-      await this.balanceService.rollbackReservation(request.employeeId, request.locationId, request.leaveType, request.daysRequested);
+      try {
+        await this.balanceService.rollbackReservation(request.employeeId, request.locationId, request.leaveType, request.daysRequested);
+      } catch (rollbackError) {
+        this.logger.error(`Rollback failed for request ${request.id}`, rollbackError.stack);
+        request.notes += ` | Rollback failed: ${rollbackError.message}`;
+      }
     }
 
     await requestRepo.save(request);
