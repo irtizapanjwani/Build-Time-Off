@@ -3,7 +3,7 @@
 Professional-grade time-off management service built with NestJS, TypeORM, and SQLite.
 
 ## Project Overview
-This service was architected and implemented by Antigravity (AI coding assistant) following a strict Technical Requirements Document (TRD). The development lifecycle integrated CodeRabbit for automated code reviews.
+This service was Architected using an AI-augmented development workflow with a focus on high-integrity distributed systems. (AI coding assistant) following a strict Technical Requirements Document (TRD). The development lifecycle integrated CodeRabbit for automated code reviews.
 
 ## Development Workflow
 1. Development was conducted primarily on the `dev` branch.
@@ -55,9 +55,48 @@ Invoke-RestMethod -Uri "http://localhost:3000/api/v1/time-off" -Method Post -Con
 Invoke-RestMethod -Uri "http://localhost:3000/api/v1/time-off/employee-123" -Method Get
 ```
 
+## Testing Suite
+
+The service includes a comprehensive testing suite to ensure data integrity and fault tolerance.
+
+### 1. Unit Tests
+Focuses on the optimistic locking logic and arithmetic reconciliation within the service layer.
+```bash
+# Run service unit tests
+npm test src/services/balance.service.spec.js
+```
+
+### 2. End-to-End (E2E) Tests
+Validates the full API lifecycle using a virtual test environment.
+```bash
+# Run all E2E tests
+npm run test:e2e
+```
+
+### 3. Chaos Resilience Test
+Automates the simulation of an HCM outage and verifies that the system correctly queues and recovers the request once HCM is restored.
+**Prerequisite**: Ensure both the Main Service and Mock HCM are running.
+```bash
+# Execute recovery simulation
+node scripts/chaos-test.js
+```
+
+#### What to expect in each terminal during the Chaos Test:
+
+*   **Terminal 1 (Main App)**:
+    *   Will log `HCM Sync failed... Moving to HCM_ERROR` when the request is first submitted.
+    *   Will log `Enqueued Retry Job` for the failed request.
+    *   After recovery, will log `Successfully retried HCM job` once the cron worker (30s interval) picks it up.
+*   **Terminal 2 (Mock HCM)**:
+    *   Will show `Outage mode flipped to: ON`.
+    *   Will log `POST deduct rejected: Outage Enabled (503)`.
+    *   Will show `Outage mode flipped to: OFF` followed by successful deduction logs.
+*   **Terminal 3 (Chaos Script)**:
+    *   Will display a step-by-step walkthrough: `Enabling Outage` -> `Submitting Request` -> `Disabling Outage` -> `Waiting for Cron` -> `✅ PASS`.
+
 ## Key Technical Measures
-- Optimistic Locking: Strict version-based concurrency control in BalanceService.
-- Arithmetic Reconciliation: Strict verification of HCM balances after deductions.
-- Circuit Breaker: Automated failover and retry queueing during HCM outages.
-- Idempotency: Configurable TTL-based request deduplication.
-- WAL Mode: SQLite Write-Ahead Logging for high-concurrency read/write performance.
+- **Optimistic Locking**: Strict version-based concurrency control in BalanceService.
+- **Arithmetic Reconciliation**: Verification of HCM balances with 0.01 rounding tolerance.
+- **Circuit Breaker**: Automated failover and retry queueing (max 4-hour window).
+- **Idempotency**: SHA-256 redacted keys with configurable TTL.
+- **WAL Mode**: SQLite Write-Ahead Logging for high-concurrency performance.
