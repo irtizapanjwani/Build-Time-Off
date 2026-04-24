@@ -1,0 +1,97 @@
+import { Entity, PrimaryGeneratedColumn, Column, VersionColumn, CreateDateColumn, Check } from 'typeorm';
+import { LeaveType } from '../common/enums/leave-type.enum.js';
+import { RequestStatus } from '../common/enums/request-status.enum.js';
+
+/**
+ * @typedef {import('../common/enums/leave-type.enum').LeaveType} LeaveType
+ * @typedef {import('../common/enums/request-status.enum').RequestStatus} RequestStatus
+ */
+
+@Entity()
+@Check('"daysRequested" > 0')
+@Check('"endDate" >= "startDate"')
+export class TimeOffRequest {
+  /**
+   * @type {string}
+   */
+  @PrimaryGeneratedColumn('uuid')
+  id;
+
+  /**
+   * @type {string}
+   */
+  @Column({ type: 'varchar', length: 64 })
+  employeeId;
+
+  /**
+   * @type {string}
+   */
+  @Column({ type: 'varchar', length: 64 })
+  locationId;
+
+  /**
+   * @type {LeaveType}
+   */
+  @Column({ type: 'simple-enum', enum: LeaveType })
+  leaveType;
+
+  /**
+   * @type {string}
+   */
+  @Column({ type: 'date' })
+  startDate;
+
+  /**
+   * @type {string}
+   */
+  @Column({ type: 'date' })
+  endDate;
+
+  /**
+   * @type {number}
+   */
+  @Column({ type: 'decimal', precision: 10, scale: 4 })
+  daysRequested;
+
+  /**
+   * @type {RequestStatus}
+   */
+  @Column({ type: 'simple-enum', enum: RequestStatus })
+  status;
+
+  /**
+   * @type {string|null}
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  hcmTransactionId;
+
+  /**
+   * @type {Date}
+   */
+  @CreateDateColumn()
+  requestedAt;
+
+  /**
+   * @type {Date|null}
+   */
+  @Column({ type: 'datetime', nullable: true })
+  resolvedAt;
+
+  /**
+   * @type {string|null}
+   */
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  resolvedBy;
+
+  /**
+   * @type {string|null}
+   */
+  @Column({ type: 'text', nullable: true })
+  notes;
+
+  /**
+   * @type {number}
+   */
+  @VersionColumn()
+  version;
+}

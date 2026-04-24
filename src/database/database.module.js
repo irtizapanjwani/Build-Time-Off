@@ -35,9 +35,12 @@ import * as fs from 'fs';
           type: 'better-sqlite3',
           database: dbPath,
           // Migrations, not synchronize, manage schema in production (TRD 13.2)
-          synchronize: false,
+          // synchronize enabled only in dev for convenience
+          synchronize: process.env.NODE_ENV !== 'production',
           // Auto-load all entity files from the entities directory
           autoLoadEntities: true,
+          // Explicitly load entities so TypeORM finds them before modules are wired
+          entities: [__dirname + '/../entities/*.entity.js'],
           // Enable verbose logging in dev for observability (TRD Section 11)
           logging: process.env.NODE_ENV !== 'production' ? ['query', 'error'] : ['error'],
         };
@@ -52,7 +55,7 @@ export class DatabaseModule {
    * is active — critical for the reconciliation worker reading balances
    * while the API layer processes requests.
    */
-  constructor() {}
+  constructor() { }
 
   async onModuleInit() {
     // WAL mode is set via the database connection after initialization.
