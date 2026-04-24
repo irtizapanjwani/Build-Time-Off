@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseInterceptors, Dependencies, Bind, UsePipes, ValidationPipe } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseInterceptors, Dependencies, Bind, UsePipes, ValidationPipe } from '@nestjs/common';
 import { RequestService } from '../services/request.service.js';
 import { IdempotencyInterceptor } from '../common/interceptors/idempotency.interceptor.js';
 import { CircuitBreakerInterceptor } from '../common/interceptors/circuit-breaker.interceptor.js';
@@ -20,5 +20,11 @@ export class TimeOffController {
   @Bind(Body())
   async createRequest(createRequestDto) {
     return await this.requestService.createTimeOffRequest(createRequestDto);
+  }
+
+  @Get(':employeeId')
+  @Bind(Param('employeeId'))
+  async findAllByEmployee(employeeId) {
+    return await this.requestService.findAllByEmployee(employeeId);
   }
 }

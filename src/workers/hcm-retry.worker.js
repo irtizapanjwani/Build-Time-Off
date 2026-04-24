@@ -127,7 +127,13 @@ export class HcmRetryWorker {
       } catch (error) {
         this.logger.error(`HCM retry failed for job ${job.id}: ${error.message}`);
         
-        if (job.attempts >= 5) { // Assuming 5 is max retries
+        // TRD Section 6.3: Max retry window of 4 hours
+        const fourHoursMs = 4 * 60 * 60 * 1000;
+        const jobAgeMs = Date.now() - new Date(job.createdAt).getTime();
+        const isExpired = jobAgeMs > fourHoursMs;
+
+        if (isExpired) {
+          this.logger.error(`HCM retry job ${job.id} expired after 4 hours. Moving to FAILED.`);
           job.status = RetryStatus.FAILED;
           const request = await requestRepo.findOne({ where: { id: job.requestId } });
           if (request) {

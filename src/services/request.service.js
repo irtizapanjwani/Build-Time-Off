@@ -6,6 +6,7 @@ import { TimeOffRequest } from '../entities/time-off-request.entity.js';
 import { HcmRetryJob } from '../entities/hcm-retry-job.entity.js';
 import { RequestStatus } from '../common/enums/request-status.enum.js';
 import { RetryStatus } from '../common/enums/retry-status.enum.js';
+import { LeaveBalance } from '../entities/leave-balance.entity.js';
 
 @Injectable()
 @Dependencies(DataSource, BalanceService, HcmClientService)
@@ -37,7 +38,14 @@ export class RequestService {
     });
     await requestRepo.save(request);
 
-    // 2. Reserve Balance Optimistically
+    // 2. Capture pre-deduction balance for strict arithmetic reconciliation
+    const balanceRepo = this.dataSource.getRepository(LeaveBalance);
+    const preBalanceEntity = await balanceRepo.findOne({
+      where: { employeeId: request.employeeId, locationId: request.locationId, leaveType: request.leaveType }
+    });
+    const preDeductionBalance = preBalanceEntity ? Number(preBalanceEntity.balance) : 0;
+
+    // 3. Reserve Balance Optimistically
     try {
       await this.balanceService.reserveBalance(request.employeeId, request.locationId, request.leaveType, request.daysRequested);
     } catch (error) {
@@ -81,12 +89,18 @@ export class RequestService {
     try {
       const hcmBalanceResponse = await this.hcmClientService.getBalance(request.employeeId, request.locationId, request.leaveType);
 
-      // Determine if we should approve or flag
-      // TODO: Implement strict arithmetic reconciliation.
-      // We need the pre-deduction balance available in this context to strictly check:
-      // (preDeductionBalance - request.daysRequested === hcmBalanceResponse.balance).
-      // For now, at minimum enforce that hcmBalanceResponse.balance is non-negative.
-      const verificationSucceeded = hcmBalanceResponse && typeof hcmBalanceResponse.balance === 'number' && hcmBalanceResponse.balance >= 0;
+      // Determine if we should approve or flag using strict arithmetic reconciliation.
+      // TRD Requirement: Ensure local math matches remote HCM state exactly.
+      const expectedBalance = preDeductionBalance - request.daysRequested;
+      const actualBalance = hcmBalanceResponse ? Number(hcmBalanceResponse.balance) : null;
+      
+      // TRD Section 6.2: 0.01 days rounding tolerance prevents false alarms from floating-point drift
+      const tolerance = 0.01;
+      const verificationSucceeded = actualBalance !== null && Math.abs(actualBalance - expectedBalance) < tolerance;
+
+      if (!verificationSucceeded) {
+        this.logger.warn(`Arithmetic reconciliation failed for request ${request.id}. Expected: ${expectedBalance}, Got: ${actualBalance}`);
+      }
 
       if (verificationSucceeded) {
         await this.balanceService.commitReservation(request.employeeId, request.locationId, request.leaveType, request.daysRequested);
@@ -116,5 +130,19 @@ export class RequestService {
 
     await requestRepo.save(request);
     return request;
+  }
+
+  /**
+   * Retrieves all time-off requests for a specific employee.
+   * 
+   * @param {string} employeeId 
+   * @returns {Promise<TimeOffRequest[]>}
+   */
+  async findAllByEmployee(employeeId) {
+    const requestRepo = this.dataSource.getRepository(TimeOffRequest);
+    return await requestRepo.find({
+      where: { employeeId },
+      order: { requestedAt: 'DESC' }
+    });
   }
 }
