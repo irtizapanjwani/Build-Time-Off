@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, VersionColumn, CreateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, VersionColumn, CreateDateColumn, Check } from 'typeorm';
 import { LeaveType } from '../common/enums/leave-type.enum';
 import { RequestStatus } from '../common/enums/request-status.enum';
 
@@ -8,6 +8,8 @@ import { RequestStatus } from '../common/enums/request-status.enum';
  */
 
 @Entity()
+@Check('"daysRequested" > 0')
+@Check('"endDate" >= "startDate"')
 export class TimeOffRequest {
   /**
    * @type {string}
@@ -36,13 +38,13 @@ export class TimeOffRequest {
   /**
    * @type {string}
    */
-  @Column({ type: 'text' })
+  @Column({ type: 'date' })
   startDate;
 
   /**
    * @type {string}
    */
-  @Column({ type: 'text' })
+  @Column({ type: 'date' })
   endDate;
 
   /**
